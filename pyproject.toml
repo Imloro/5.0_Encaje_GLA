@@ -1,0 +1,29 @@
+[project]
+name = "encaje-catastral"
+version = "0.1.0"
+description = "Motor de calculo de GLA sobre parcelas catastrales espanolas"
+requires-python = ">=3.10"
+dependencies = [
+    "shapely>=2.0",
+    "pyproj>=3.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+web = ["flask>=3.0"]
+gui = []  # tkinter viene con Python estandar
+
+[project.scripts]
+encaje = "encaje.cli:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# NOTA: shapely y pyproj hacen el trabajo geometrico pesado (offset,
+# ray-casting, minimum_rotated_rectangle, conversion CRS). El motor
+# funciona SIN ellas gracias al fallback puro en Python, pero con ellas
+# es mas rapido y robusto. Instalar con:  pip install -e .

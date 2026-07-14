@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Encaje Catastral — Cálculo de GLA</title>
+  <style>
+    :root {
+      --tinta: #14232b;        /* azul catastral profundo */
+      --tinta-2: #33474f;
+      --papel: #f5f3ee;        /* papel tecnico */
+      --linea: #d4cfc4;
+      --agua: #2f6f8f;         /* azul plano */
+      --agua-claro: #eaf1f4;
+      --edificable: #c47a2c;   /* naranja retranqueo */
+      --verde: #3a7d44;
+      --ambar: #b8860b;
+      --rojo: #a4443a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "SF Mono", "JetBrains Mono", "Consolas", monospace;
+      background: var(--papel);
+      color: var(--tinta);
+      line-height: 1.5;
+      padding: 0;
+    }
+    .cinta {
+      background: var(--tinta);
+      color: var(--papel);
+      padding: 22px 32px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .cinta h1 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .cinta .sub {
+      font-size: 12px;
+      opacity: 0.7;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .lienzo {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+    .rejilla {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+    @media (max-width: 680px) { .rejilla { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: #fff;
+      border: 1px solid var(--linea);
+      padding: 24px;
+    }
+    .panel h2 {
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--tinta-2);
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--linea);
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--tinta-2);
+      margin: 14px 0 5px;
+      letter-spacing: 0.3px;
+    }
+    label:first-of-type { margin-top: 0; }
+    input[type="number"], select {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid var(--linea);
+      background: var(--papel);
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--tinta);
+    }
+    input:focus, select:focus {
+      outline: 2px solid var(--agua);
+      outline-offset: -1px;
+    }
+    .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .subida {
+      border: 2px dashed var(--linea);
+      background: var(--papel);
+      padding: 22px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .subida:hover, .subida.activo {
+      border-color: var(--agua);
+      background: var(--agua-claro);
+    }
+    .subida .icono { font-size: 26px; }
+    .subida .txt { font-size: 13px; color: var(--tinta-2); margin-top: 6px; }
+    .subida .archivo { font-size: 13px; color: var(--agua); font-weight: 600; margin-top: 8px; word-break: break-all; }
+    input[type="file"] { display: none; }
+
+    /* Mapa de linderos */
+    .mapa-linderos { display: none; margin-top: 14px; }
+    .mapa-linderos.visible { display: block; }
+    .mapa-linderos svg { width: 100%; border: 1px solid var(--linea); background: #fff; }
+    .mapa-leyenda {
+      display: flex; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--tinta-2);
+      flex-wrap: wrap;
+    }
+    .mapa-leyenda span { display: flex; align-items: center; gap: 4px; }
+    .mapa-leyenda .dot {
+      width: 12px; height: 4px; display: inline-block;
+    }
+    .mapa-info { font-size: 11px; color: var(--tinta-2); margin-top: 6px; }
+    .lindero-seg { cursor: pointer; transition: opacity 0.12s; }
+    .lindero-seg:hover { opacity: 0.7; }
+
+    .check { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+    .check input { width: auto; }
+    .check label { margin: 0; }
+
+    button.calcular {
+      width: 100%;
+      margin-top: 22px;
+      padding: 13px;
+      background: var(--tinta);
+      color: var(--papel);
+      border: none;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.calcular:hover { background: var(--agua); }
+    button.calcular:disabled { opacity: 0.5; cursor: wait; }
+
+    /* Resultado */
+    #resultado { display: none; }
+    #resultado.visible { display: block; }
+    .dato {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--linea);
+      font-size: 13px;
+    }
+    .dato .k { color: var(--tinta-2); }
+    .dato .v { font-weight: 600; }
+    .estado-badge {
+      display: inline-block;
+      padding: 3px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #fff;
+    }
+    .estado-badge.verde { background: var(--verde); }
+    .estado-badge.amarillo { background: var(--ambar); }
+    .estado-badge.rojo { background: var(--rojo); }
+
+    .incidencia {
+      padding: 8px 11px;
+      margin-top: 7px;
+      font-size: 12px;
+      border-left: 3px solid var(--tinta-2);
+      background: var(--papel);
+    }
+    .incidencia.grave { border-left-color: var(--rojo); background: #fbe9e7; color: #7a2820; }
+    .incidencia.menor { border-left-color: var(--ambar); background: #fdf6e3; color: #6b5900; }
+    .incidencia.info  { border-left-color: var(--agua); background: var(--agua-claro); color: var(--tinta-2); }
+    .incidencia .etq {
+      font-weight: 600; text-transform: uppercase; font-size: 10px;
+      letter-spacing: 1px; margin-right: 6px;
+    }
+    .colindante-item {
+      display: flex; justify-content: space-between;
+      padding: 6px 0; font-size: 12px; border-bottom: 1px dotted var(--linea);
+    }
+    .colindante-item .ref { color: var(--tinta-2); }
+    .seccion-titulo {
+      font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--tinta-2); margin: 18px 0 4px; padding-top: 12px;
+      border-top: 1px solid var(--linea);
+    }
+
+    .huella-item {
+      background: var(--papel);
+      border-left: 3px solid var(--agua);
+      padding: 10px 12px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .huella-item.no-alcanza { border-left-color: var(--ambar); }
+    .huella-item .tipo { font-weight: 600; text-transform: capitalize; }
+    .huella-item .estado { font-size: 11px; color: var(--tinta-2); }
+
+    .aviso {
+      background: #fdf6e3;
+      border-left: 3px solid var(--ambar);
+      padding: 9px 12px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #6b5900;
+    }
+    .error {
+      background: #fbe9e7;
+      border-left: 3px solid var(--rojo);
+      padding: 12px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--rojo);
+    }
+
+    button.descargar {
+      width: 100%;
+      margin-top: 20px;
+      padding: 13px;
+      background: var(--edificable);
+      color: #fff;
+      border: none;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      text-decoration: none;
+      display: block;
+      text-align: center;
+      transition: background 0.15s;
+    }
+    button.descargar:hover { background: #a86520; }
+
+    .pie {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 20px 32px 40px;
+      font-size: 11px;
+      color: var(--tinta-2);
+      opacity: 0.7;
+      letter-spacing: 0.5px;
+    }
+    .cargando { text-align: center; padding: 30px; color: var(--tinta-2); font-size: 13px; display: none; }
+    .cargando.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="cinta">
+    <h1>Encaje Catastral</h1>
+    <span class="sub">Cálculo de GLA · {{ backend }}</span>
+  </div>
+
+  <div class="lienzo">
+    <div class="rejilla">
+      <!-- ENTRADA -->
+      <div class="panel">
+        <h2>Parámetros</h2>
+        <form id="form">
+          <label>Parcela — GML catastral o ZIP FXCC</label>
+          <div class="subida" id="zona">
+            <div class="icono">↑</div>
+            <div class="txt">Arrastra el GML o ZIP FXCC, o haz clic para seleccionar</div>
+            <div class="archivo" id="nombre-archivo"></div>
+            <input type="file" id="entrada" name="entrada" accept=".gml,.zip">
+          </div>
+
+          <label>Colindantes — ZIP FXCC (opcional)</label>
+          <div class="subida" id="zona-fxcc">
+            <div class="icono">+</div>
+            <div class="txt">Arrastra el ZIP FXCC de colindantes, o haz clic</div>
+            <div class="archivo" id="nombre-fxcc"></div>
+            <input type="file" id="fxcc" name="fxcc" accept=".zip">
+          </div>
+
+          <!-- Mapa de linderos (aparece tras cargar el archivo) -->
+          <div class="mapa-linderos" id="mapa-linderos">
+            <label>Linderos — haz clic para clasificar como vial o privado</label>
+            <div id="mapa-svg"></div>
+            <div class="mapa-leyenda">
+              <span><span class="dot" style="background:#aaa;"></span> Sin determinar</span>
+              <span><span class="dot" style="background:#1a6b1a;"></span> Acceso principal</span>
+              <span><span class="dot" style="background:#4caf50;"></span> Acceso secundario</span>
+              <span><span class="dot" style="background:#c47a2c;"></span> Privado</span>
+            </div>
+            <div class="mapa-info" id="mapa-info"></div>
+          </div>
+          <input type="hidden" id="precargar_id" name="precargar_id" value="">
+          <input type="hidden" id="linderos_clasificacion" name="linderos_clasificacion" value="">
+
+          <label>Retranqueo uniforme (m)</label>
+          <input type="number" name="retranqueo" step="0.5" min="0" placeholder="Aplica a todo el perímetro">
+
+          <div class="fila">
+            <div>
+              <label>Retranqueo vial (m)</label>
+              <input type="number" name="vial" step="0.5" min="0" placeholder="opcional">
+            </div>
+            <div>
+              <label>Retranqueo lindero (m)</label>
+              <input type="number" name="lindero" step="0.5" min="0" placeholder="opcional">
+            </div>
+          </div>
+
+          <div class="fila">
+            <div>
+              <label>Ocupación (%)</label>
+              <input type="number" name="ocupacion" step="1" min="1" max="100" value="60">
+            </div>
+            <div>
+              <label>Edificabilidad (m²t/m²s)</label>
+              <input type="number" name="edif" step="0.01" min="0" placeholder="opcional">
+            </div>
+          </div>
+
+          <label>Modo de huella</label>
+          <select name="modo">
+            <option value="auto">Auto — rectángulo, o L si no alcanza</option>
+            <option value="rect">Solo rectángulo</option>
+            <option value="huella">Solo huella en L</option>
+            <option value="ambas">Ambas variantes</option>
+          </select>
+
+          <div class="fila">
+            <div>
+              <label>Playa de maniobra (m)</label>
+              <input type="number" name="playa" step="1" min="0" value="35"
+                     placeholder="35m por defecto">
+            </div>
+            <div>
+              <label>Oficinas (% GLA)</label>
+              <input type="number" name="oficinas_pct" step="1" min="0" max="20" value="4"
+                     placeholder="4-5% de la GLA">
+            </div>
+          </div>
+
+          <label>Tipo de oficinas</label>
+          <select name="tipo_oficina">
+            <option value="integrada">Integradas en la nave</option>
+            <option value="exenta">Exentas (edificio separado)</option>
+          </select>
+
+          <div class="fila">
+            <div>
+              <label>Plantas oficinas</label>
+              <input type="number" name="n_plantas" step="1" min="1" max="4" value="2">
+            </div>
+            <div>
+              <label>Módulo muelle (m)</label>
+              <input type="number" name="modulo_muelle" step="0.5" min="3" max="10" value="5.5">
+            </div>
+          </div>
+
+          <label>Tolerancia de validación (m)</label>
+          <input type="number" name="tolerancia" step="0.01" min="0" value="0.05"
+                 placeholder="Umbral vértice fuera: tolerancia vs error">
+
+          <button type="submit" class="calcular" id="btn">Calcular</button>
+        </form>
+      </div>
+
+      <!-- SALIDA -->
+      <div class="panel">
+        <h2>Resultado</h2>
+        <div class="cargando" id="cargando">Calculando…</div>
+        <div id="vacio" style="font-size:13px;color:var(--tinta-2);">
+          Sube un GML o ZIP FXCC y pulsa Calcular para ver el resultado.
+        </div>
+        <div id="resultado"></div>
+        <div id="error-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pie">
+    Motor determinista · {{ crs }} · Coordenadas EPSG del catastro → WGS84 · KML para Google Earth
+  </div>
+
+  <script>
+    // Archivos almacenados en variables (inp.files es readonly al hacer drop en algunos navegadores)
+    let archivoEntrada = null;
+    let archivoFxcc = null;
+
+    function conectarZona(z, inp, nom, setFile) {
+      z.addEventListener('click', (ev) => {
+        if (ev.target === inp) return; // evitar loop
+        inp.click();
+      });
+      inp.addEventListener('change', () => {
+        if (inp.files.length) {
+          setFile(inp.files[0]);
+          nom.textContent = inp.files[0].name;
+          z.style.borderColor = 'var(--agua)';
+        }
+      });
+      ['dragover','dragenter'].forEach(e => z.addEventListener(e, ev => {
+        ev.preventDefault(); ev.stopPropagation(); z.classList.add('activo');
+      }));
+      ['dragleave','drop'].forEach(e => z.addEventListener(e, ev => {
+        ev.preventDefault(); ev.stopPropagation(); z.classList.remove('activo');
+      }));
+      z.addEventListener('drop', ev => {
+        const files = ev.dataTransfer.files;
+        if (files.length) {
+          setFile(files[0]);
+          nom.textContent = files[0].name;
+          z.style.borderColor = 'var(--agua)';
+          // Intentar asignar al input (funciona en Chrome/Edge, falla en Firefox)
+          try { inp.files = files; } catch (e) { /* readonly en este navegador */ }
+        }
+      });
+    }
+
+    const zona = document.getElementById('zona');
+    const input = document.getElementById('entrada');
+    const nombre = document.getElementById('nombre-archivo');
+    conectarZona(zona, input, nombre, f => { archivoEntrada = f; precargar(); });
+
+    const zonaFxcc = document.getElementById('zona-fxcc');
+    const inputFxcc = document.getElementById('fxcc');
+    const nombreFxcc = document.getElementById('nombre-fxcc');
+    conectarZona(zonaFxcc, inputFxcc, nombreFxcc, f => { archivoFxcc = f; precargar(); });
+
+    // === PRECARGA Y MAPA DE LINDEROS ===
+    const mapaCont = document.getElementById('mapa-linderos');
+    const mapaSvg = document.getElementById('mapa-svg');
+    const mapaInfo = document.getElementById('mapa-info');
+    const hidPrecargar = document.getElementById('precargar_id');
+    const hidClasif = document.getElementById('linderos_clasificacion');
+    let linderosData = [];  // estado de clasificacion
+    const COLORES = {
+      desconocido: '#aaa', vial: '#2e7d32', privado: '#c47a2c',
+      acceso_principal: '#1a6b1a', acceso_secundario: '#4caf50'
+    };
+    const CICLO = ['desconocido', 'acceso_principal', 'acceso_secundario', 'privado'];
+
+    async function precargar() {
+      const file = archivoEntrada || (input.files.length ? input.files[0] : null);
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('entrada', file, file.name);
+      const fxcc = archivoFxcc || (inputFxcc.files.length ? inputFxcc.files[0] : null);
+      if (fxcc) fd.append('fxcc', fxcc, fxcc.name);
+
+      mapaCont.classList.remove('visible');
+      mapaInfo.textContent = 'Cargando parcela...';
+      mapaCont.classList.add('visible');
+
+      try {
+        const resp = await fetch('/precargar', { method: 'POST', body: fd });
+        const d = await resp.json();
+        if (d.error) { mapaInfo.textContent = 'Error: ' + d.error; return; }
+
+        hidPrecargar.value = d.precargar_id;
+        linderosData = d.linderos.map(l => ({ ...l }));
+        renderizarMapa(d);
+        mapaInfo.textContent = d.referencia + ' — ' + d.area.toLocaleString('es') +
+          ' m² — ' + d.linderos.length + ' linderos' +
+          (d.n_colindantes ? ' — ' + d.n_colindantes + ' colindantes' : '') +
+          ' — Clic para clasificar';
+      } catch (e) {
+        mapaInfo.textContent = 'Error de conexion: ' + e.message;
+      }
+    }
+
+    function renderizarMapa(d) {
+      const [w, h] = d.svg_size;
+      let svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"
+                      style="font-family:Arial,sans-serif;">`;
+
+      // Colindantes (fondo gris)
+      (d.colindantes_svg || []).forEach(c => {
+        const pts = c.vertices.map(v => v.join(',')).join(' ');
+        svg += `<polygon points="${pts}" fill="#eee" stroke="#ccc" stroke-width="0.5"/>`;
+      });
+
+      // Parcela (relleno azul claro)
+      const ptsParcela = d.vertices_svg.map(v => `${v[0].toFixed(1)},${v[1].toFixed(1)}`).join(' ');
+      svg += `<polygon points="${ptsParcela}" fill="#e8eff8" stroke="#2e5c8a"
+                        stroke-width="1.5" fill-opacity="0.5"/>`;
+
+      // Linderos (segmentos clicables)
+      linderosData.forEach(l => {
+        const color = COLORES[l.tipo] || COLORES.desconocido;
+        svg += `<line class="lindero-seg" data-idx="${l.indice}"
+                      x1="${l.inicio[0].toFixed(1)}" y1="${l.inicio[1].toFixed(1)}"
+                      x2="${l.fin[0].toFixed(1)}" y2="${l.fin[1].toFixed(1)}"
+                      stroke="${color}" stroke-width="5" stroke-linecap="round"/>`;
+        // Etiqueta solo en linderos largos (> 10m)
+        if (l.longitud > 10) {
+          svg += `<text x="${l.medio[0].toFixed(1)}" y="${l.medio[1].toFixed(1)}"
+                        font-size="8" fill="${color}" text-anchor="middle"
+                        dominant-baseline="central" pointer-events="none"
+                        stroke="#fff" stroke-width="2.5" paint-order="stroke">
+                    ${l.longitud}m</text>`;
+        }
+      });
+
+      svg += '</svg>';
+      mapaSvg.innerHTML = svg;
+
+      // Event listeners para clics en linderos
+      mapaSvg.querySelectorAll('.lindero-seg').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.dataset.idx);
+          const l = linderosData[idx];
+          const pos = CICLO.indexOf(l.tipo);
+          l.tipo = CICLO[(pos + 1) % CICLO.length];
+          l.fuente = 'manual';
+          el.setAttribute('stroke', COLORES[l.tipo]);
+          actualizarClasificacion();
+        });
+      });
+
+      actualizarClasificacion();
+    }
+
+    function actualizarClasificacion() {
+      const clasifs = linderosData
+        .filter(l => l.tipo !== 'desconocido')
+        .map(l => ({ indice: l.indice, tipo: l.tipo }));
+      hidClasif.value = JSON.stringify(clasifs);
+
+      const nap = linderosData.filter(l => l.tipo === 'acceso_principal').length;
+      const nas = linderosData.filter(l => l.tipo === 'acceso_secundario').length;
+      const nv = linderosData.filter(l => l.tipo === 'vial').length;
+      const np = linderosData.filter(l => l.tipo === 'privado').length;
+      const nd = linderosData.filter(l => l.tipo === 'desconocido').length;
+      const resumen = [];
+      if (nap) resumen.push(nap + ' acceso principal');
+      if (nas) resumen.push(nas + ' acceso secundario');
+      if (nv) resumen.push(nv + ' vial');
+      if (np) resumen.push(np + ' privado');
+      if (nd) resumen.push(nd + ' sin determinar');
+      mapaInfo.textContent = mapaInfo.textContent.split('—')[0].trim() +
+        ' — ' + resumen.join(', ');
+    }
+
+    const form = document.getElementById('form');
+    const btn = document.getElementById('btn');
+    const cargando = document.getElementById('cargando');
+    const vacio = document.getElementById('vacio');
+    const resultado = document.getElementById('resultado');
+    const errorBox = document.getElementById('error-box');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.innerHTML = '';
+      resultado.classList.remove('visible');
+      resultado.innerHTML = '';
+
+      // Usar el archivo almacenado en variable (drag-drop) o del input (click)
+      const entradaFile = archivoEntrada || (input.files.length ? input.files[0] : null);
+      const fxccFile = archivoFxcc || (inputFxcc.files.length ? inputFxcc.files[0] : null);
+
+      if (!entradaFile) {
+        errorBox.innerHTML = '<div class="error">Selecciona un archivo GML o ZIP FXCC.</div>';
+        return;
+      }
+      vacio.style.display = 'none';
+      cargando.classList.add('visible');
+      btn.disabled = true;
+
+      try {
+        // Construir FormData manualmente para incluir ambos archivos
+        const fd = new FormData();
+        fd.append('entrada', entradaFile, entradaFile.name);
+        if (fxccFile) {
+          fd.append('fxcc', fxccFile, fxccFile.name);
+        }
+        // Añadir los campos del formulario
+        for (const el of form.elements) {
+          if (el.name && el.type !== 'file' && el.type !== 'submit') {
+            fd.append(el.name, el.value);
+          }
+        }
+
+        const r = await fetch('/calcular', { method: 'POST', body: fd });
+        const d = await r.json();
+        cargando.classList.remove('visible');
+        btn.disabled = false;
+
+        if (d.error) {
+          errorBox.innerHTML = `<div class="error">${d.error}</div>`;
+          return;
+        }
+
+        let html = '';
+        html += fila('Referencia', d.referencia);
+        html += fila('Formato', d.formato);
+        html += fila('Área parcela', d.area_parcela.toLocaleString('es') + ' m²');
+        html += fila('Discrepancia catastro', d.discrepancia + ' %');
+        html += fila('Compacidad', d.compacidad + ' % (' + d.orientacion + '°)');
+        html += fila('Área edificable', d.area_edificable.toLocaleString('es') + ' m²');
+        html += fila('GLA objetivo', '<strong>' + d.gla_objetivo.toLocaleString('es') + ' m²</strong>');
+        html += '<div class="dato"><span class="k">Validación geométrica</span>' +
+                '<span class="v"><span class="estado-badge ' + d.estado_color + '">' +
+                d.estado.replace('_',' ') + '</span></span></div>';
+
+        d.huellas.forEach(h => {
+          const cls = h.alcanza ? '' : ' no-alcanza';
+          const est = h.alcanza ? 'alcanza el objetivo' : 'NO alcanza — considerar L o multinave';
+          html += `<div class="huella-item${cls}">
+            <span class="tipo">${h.tipo.replace('_',' ')}</span>: ${h.area.toLocaleString('es')} m² ${h.dims}
+            <div class="estado">${est}</div></div>`;
+        });
+
+        if (d.implantacion) {
+          const imp = d.implantacion;
+          html += '<div class="seccion-titulo">Implantación logística (score ' +
+                  imp.score + ')</div>';
+          html += fila('Nave', imp.nave_gla.toLocaleString('es') + ' m² ' + imp.nave_dims +
+                  ' · ' + imp.nave_angulo + '°');
+          if (imp.n_muelles) {
+            html += fila('Muelles', imp.n_muelles + ' posiciones (' +
+                         imp.longitud_muelles + 'm fachada útil)');
+          }
+          imp.playas.forEach(p => {
+            html += fila('Playa ' + p.tipo, p.profundidad + 'm — ' +
+                         p.area.toLocaleString('es') + ' m²');
+          });
+          imp.oficinas.forEach(o => {
+            html += fila('Oficinas ' + o.tipo, o.area.toLocaleString('es') +
+                         ' m² — ' + o.posicion);
+          });
+          html += `<div class="mapa-info" style="margin-top:8px">${imp.descripcion}</div>`;
+
+          // Alternativas
+          if (imp.alternativas && imp.alternativas.length) {
+            html += '<div class="seccion-titulo">Alternativas</div>';
+            imp.alternativas.forEach((alt, i) => {
+              const docks = alt.n_muelles ? alt.n_muelles + ' muelles · ' : '';
+              html += `<div class="huella-item">
+                <span class="tipo">Alt. ${i+2}</span> score ${alt.score} ·
+                ${alt.nave_gla.toLocaleString('es')} m² · ${docks}${alt.nave_dims} · ${alt.nave_angulo}°
+                </div>`;
+            });
+          }
+        }
+
+        if (d.incidencias && d.incidencias.length) {
+          html += '<div class="seccion-titulo">Incidencias</div>';
+          d.incidencias.forEach(i => {
+            html += `<div class="incidencia ${i.gravedad}">
+              <span class="etq">${i.gravedad}</span>${i.mensaje}</div>`;
+          });
+        }
+
+        if (d.colindantes && d.colindantes.length) {
+          html += '<div class="seccion-titulo">Colindantes (' + d.colindantes.length + ')</div>';
+          d.colindantes.forEach(c => {
+            const uso = c.uso ? ' · ' + c.uso : '';
+            html += `<div class="colindante-item">
+              <span class="ref">${c.referencia}${uso}</span>
+              <span>${c.area.toLocaleString('es')} m²</span></div>`;
+          });
+        }
+
+        html += `<a class="descargar" href="/descargar/${d.kml_id}">Descargar KML</a>`;
+
+        resultado.innerHTML = html;
+        resultado.classList.add('visible');
+      } catch (err) {
+        cargando.classList.remove('visible');
+        btn.disabled = false;
+        errorBox.innerHTML = `<div class="error">Error de conexión: ${err.message}</div>`;
+      }
+    });
+
+    function fila(k, v) {
+      return `<div class="dato"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    }
+  </script>
+</body>
+</html>
