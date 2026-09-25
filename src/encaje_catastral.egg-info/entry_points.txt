@@ -1,0 +1,2 @@
+[console_scripts]
+encaje = encaje.cli:main

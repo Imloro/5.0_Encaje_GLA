@@ -1,0 +1,10 @@
+shapely>=2.0
+pyproj>=3.4
+
+[dev]
+pytest>=7.0
+
+[gui]
+
+[web]
+flask>=3.0

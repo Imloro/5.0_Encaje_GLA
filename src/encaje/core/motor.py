@@ -11,6 +11,7 @@ from ..geometry import _backend as g
 from ..geometry import huella as h
 from ..geometry import linderos as lind
 from ..geometry import implantacion as impl
+from ..geometry import multinave as mnave
 from ..domain.modelo_territorial import ModeloTerritorial
 from ..domain.implantacion import ParametrosLogisticos
 from .modelos import (Parcela, ParametrosUrbanisticos,
@@ -50,7 +51,8 @@ def _asegurar_modelo_territorial(entrada) -> ModeloTerritorial:
 
 
 def calcular(entrada, params: ParametrosUrbanisticos,
-             params_log: ParametrosLogisticos | None = None) -> Resultado:
+             params_log: ParametrosLogisticos | None = None,
+             params_mn=None) -> Resultado:
     modelo = _asegurar_modelo_territorial(entrada)
     parcela = modelo.parcela
     val = Validacion()
@@ -145,8 +147,50 @@ def calcular(entrada, params: ParametrosUrbanisticos,
     # Si no: comportamiento original (solo GLA maxima)
     huellas: list[Huella] = []
     implantacion_obj = None
+    multinave_lst = []
 
     accesos = [l for l in modelo.linderos if l.es_acceso]
+
+    # --- MODO MULTINAVE: varias naves ortogonales, cada una con su angulo,
+    #     su playa y sus muelles, con separacion X entre naves ---
+    if params.modo_huella == ModoHuella.MULTINAVE:
+        from ..geometry.multinave import ParametrosMultinave
+        mn = params_mn or ParametrosMultinave()
+        plog = params_log or ParametrosLogisticos()
+        acc = impl.lindero_acceso_principal(modelo.linderos)
+        acc_mid = acc.punto_medio if acc is not None else None
+        res_mn = mnave.empaquetar_multinave(pol_edif, plog, mn, acc_mid)
+        multinave_lst = res_mn.naves
+        for i, nave in enumerate(res_mn.naves, start=1):
+            huellas.append(Huella(
+                tipo=f"nave_{i}", poligono=nave.nave_poligono,
+                area=nave.nave_gla, dims=nave.nave_dims,
+                angulo=nave.nave_angulo, alcanza_objetivo=True))
+        val.anadir(Incidencia(
+            tipo="multinave_generada", gravedad=Gravedad.INFO,
+            mensaje=f"Multinave: {res_mn.descripcion}"))
+        if res_mn.n_naves == 0:
+            val.anadir(Incidencia(
+                tipo="multinave_vacia", gravedad=Gravedad.MENOR,
+                mensaje="No cupo ninguna nave con los minimos indicados; "
+                        "reduce el tamano minimo o la separacion"))
+        # Validacion geometrica de cada nave y retorno
+        for hu in huellas:
+            d_fuera = _distancia_max_fuera(hu.poligono, pol_edif)
+            if d_fuera > 0:
+                grav = (Gravedad.MENOR if d_fuera <= U.tolerancia_vertice_m
+                        else Gravedad.GRAVE)
+                val.anadir(Incidencia(
+                    tipo="huella_fuera_edificable", gravedad=grav,
+                    mensaje=f"La nave '{hu.tipo}' sobresale del edificable",
+                    magnitud=d_fuera, unidad="m", umbral=U.tolerancia_vertice_m))
+        return Resultado(
+            parcela=parcela, parametros=params,
+            poligono_edificable=pol_edif, area_edificable=area_edif,
+            gla_objetivo=gla_objetivo, huellas=huellas,
+            colindantes=modelo.colindantes, implantacion=None,
+            multinave=multinave_lst, angulo_parcela=ang_parcela,
+            compacidad=compacidad, validacion=val)
     usar_implantacion = len(accesos) > 0 and params_log is not None
 
     if usar_implantacion:
@@ -262,6 +306,6 @@ def calcular(entrada, params: ParametrosUrbanisticos,
         poligono_edificable=pol_edif, area_edificable=area_edif,
         gla_objetivo=gla_objetivo, huellas=huellas,
         colindantes=modelo.colindantes,
-        implantacion=implantacion_obj,
+        implantacion=implantacion_obj, multinave=multinave_lst,
         angulo_parcela=ang_parcela, compacidad=compacidad,
         validacion=val)
