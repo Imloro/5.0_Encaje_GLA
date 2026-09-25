@@ -16,6 +16,7 @@ src/encaje/geometry/crs.py
 src/encaje/geometry/huella.py
 src/encaje/geometry/implantacion.py
 src/encaje/geometry/linderos.py
+src/encaje/geometry/multinave.py
 src/encaje/io/__init__.py
 src/encaje/io/kml_writer.py
 src/encaje/io/lectores/__init__.py
