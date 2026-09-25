@@ -33,10 +33,19 @@ def construir_parser():
     p.add_argument("--lindero", type=float, default=None, help="Retranqueo a lindero (m)")
     p.add_argument("--ocupacion", type=float, default=60.0, help="Ocupacion (%)")
     p.add_argument("--edif", type=float, default=None, help="Edificabilidad m2t/m2s")
-    p.add_argument("--modo", choices=["auto", "rect", "huella", "ambas"],
+    p.add_argument("--modo", choices=["auto", "rect", "huella", "ambas", "multinave"],
                    default="auto")
     p.add_argument("--tolerancia-vertice", type=float, default=0.05,
                    help="Umbral (m) tolerancia vs error para vertices fuera")
+    # --- multinave ---
+    p.add_argument("--sep", type=float, default=12.0,
+                   help="Separacion X entre naves (m) [modo multinave]")
+    p.add_argument("--max-naves", type=int, default=8,
+                   help="Numero maximo de naves [modo multinave]")
+    p.add_argument("--min-nave", type=float, default=2000.0,
+                   help="Area minima por nave (m2) [modo multinave]")
+    p.add_argument("--sin-playa", action="store_true",
+                   help="No reservar playa por nave [modo multinave]")
     p.add_argument("--salida", default=None, help="Ruta KML de salida")
     p.add_argument("--abrir", action="store_true", help="Abrir en Google Earth")
     return p
@@ -62,7 +71,13 @@ def main(argv=None):
         umbrales=UmbralesValidacion(tolerancia_vertice_m=args.tolerancia_vertice))
 
     entrada = leer_entrada(args.entrada, fxcc=args.fxcc)
-    resultado = calcular(entrada, params)
+    params_mn = None
+    if params.modo_huella == ModoHuella.MULTINAVE:
+        from .geometry.multinave import ParametrosMultinave
+        params_mn = ParametrosMultinave(
+            separacion_naves_m=args.sep, max_naves=args.max_naves,
+            min_area_nave_m2=args.min_nave, con_playa=not args.sin_playa)
+    resultado = calcular(entrada, params, params_mn=params_mn)
     p = entrada.parcela
 
     print("=" * 62)

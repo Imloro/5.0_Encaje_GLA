@@ -19,6 +19,7 @@ class ModoHuella(str, Enum):
     RECTANGULO = "rect"
     HUELLA_L = "huella"
     AMBAS = "ambas"
+    MULTINAVE = "multinave"   # varias naves ortogonales dentro del edificable
 
 
 @dataclass
@@ -122,6 +123,7 @@ class Resultado:
     huellas: list[Huella] = field(default_factory=list)
     colindantes: list[Colindante] = field(default_factory=list)
     implantacion: object = None      # ImplantacionLogistica (si hay accesos)
+    multinave: list = field(default_factory=list)  # lista de ImplantacionLogistica (modo multinave)
     angulo_parcela: float = 0.0
     compacidad: float = 0.0
     validacion: Validacion = field(default_factory=Validacion)

@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: encaje-catastral
+Version: 0.1.0
+Summary: Motor de calculo de GLA sobre parcelas catastrales espanolas
+Requires-Python: >=3.10
+Requires-Dist: shapely>=2.0
+Requires-Dist: pyproj>=3.4
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Provides-Extra: web
+Requires-Dist: flask>=3.0; extra == "web"
+Provides-Extra: gui

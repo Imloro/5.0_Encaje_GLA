@@ -110,6 +110,25 @@ def escribir_kml(resultado: Resultado, path: str) -> None:
                     f"<b>Area:</b> {ofi.area:,.0f} m2<br/>"
                     f"<b>Posicion:</b> {ofi.posicion}"))
 
+    # Multinave: playa y oficinas de cada nave (las cajas van como huellas)
+    for idx, nave in enumerate(resultado.multinave, start=1):
+        for playa in nave.playas:
+            if playa.poligono and len(playa.poligono) >= 3:
+                partes.append(_placemark(
+                    f"Nave {idx} · playa ({playa.profundidad_real:.0f}m, "
+                    f"{playa.area:,.0f} m2)",
+                    "playa", playa.poligono, epsg,
+                    f"<b>Nave {idx} — playa de maniobra</b><br/>"
+                    f"<b>Profundidad:</b> {playa.profundidad_real:.1f} m<br/>"
+                    f"<b>Muelles:</b> {nave.n_muelles}"))
+        for ofi in nave.oficinas:
+            if ofi.poligono and len(ofi.poligono) >= 3:
+                partes.append(_placemark(
+                    f"Nave {idx} · oficinas ({ofi.area:,.0f} m2)",
+                    "oficina", ofi.poligono, epsg,
+                    f"<b>Nave {idx} — oficinas</b><br/>"
+                    f"<b>Area:</b> {ofi.area:,.0f} m2"))
+
     kml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
